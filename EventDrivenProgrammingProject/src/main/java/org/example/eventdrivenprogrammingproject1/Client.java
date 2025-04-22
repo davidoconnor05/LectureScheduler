@@ -18,11 +18,15 @@ public class Client extends Application {
     private Socket socket;
     private PrintWriter out;
     private BufferedReader in;
+    private ToggleButton darkModeToggle;
+    private boolean isDarkMode = false;
+    private Scene scene;
 
     @Override
     public void start(Stage primaryStage) {
         primaryStage.setTitle("Lecture Scheduler Client");
-        Scene scene = new Scene(createLayout(), 350, 450);
+        VBox root = createLayout();
+        scene = new Scene(root, 350, 450);
         primaryStage.setScene(scene);
         primaryStage.show();
         connectToServer();
@@ -60,16 +64,103 @@ public class Client extends Application {
         responseArea.setEditable(false);
         responseArea.setPromptText("Server response will appear here...");
 
+        darkModeToggle = new ToggleButton("Dark Mode");
+        darkModeToggle.setOnAction(e -> toggleDarkMode());
+
         VBox layout = new VBox(10);
         layout.setPadding(new Insets(15));
-        layout.getChildren().addAll(actionBox, moduleField, dateBox, startBox, endBox, roomBox, 
-                                 sendButton, stopButton, viewTimetableButton, responseArea);
+        layout.getChildren().addAll(actionBox, moduleField, dateBox, startBox, endBox, roomBox,
+                sendButton, stopButton, viewTimetableButton, responseArea, darkModeToggle);
 
         sendButton.setOnAction(e -> sendRequest());
         stopButton.setOnAction(e -> stopConnection());
         viewTimetableButton.setOnAction(e -> requestTimetable());
 
         return layout;
+    }
+
+    private void toggleDarkMode() {
+        isDarkMode = !isDarkMode;
+        applyTheme();
+        darkModeToggle.setText(isDarkMode ? "Light Mode" : "Dark Mode");
+    }
+
+    private void applyTheme() {
+        String darkStyle = "-fx-base: #2d2d2d; " +
+                "-fx-background: #3c3f41; " +
+                "-fx-control-inner-background: #3c3f41; " +
+                "-fx-text-fill: #e0e0e0;";
+
+        if (isDarkMode) {
+            // Apply dark theme to main components
+            scene.getRoot().setStyle(darkStyle);
+            responseArea.setStyle(darkStyle + "-fx-background-color: #3c3f41;");
+            moduleField.setStyle(darkStyle);
+            actionBox.setStyle(darkStyle);
+            dateBox.setStyle(darkStyle);
+            startBox.setStyle(darkStyle);
+            endBox.setStyle(darkStyle);
+            roomBox.setStyle(darkStyle);
+            sendButton.setStyle(darkStyle);
+            stopButton.setStyle(darkStyle);
+            viewTimetableButton.setStyle(darkStyle);
+        } else {
+            // Reset to default theme
+            scene.getRoot().setStyle("");
+            responseArea.setStyle("");
+            moduleField.setStyle("");
+            actionBox.setStyle("");
+            dateBox.setStyle("");
+            startBox.setStyle("");
+            endBox.setStyle("");
+            roomBox.setStyle("");
+            sendButton.setStyle("");
+            stopButton.setStyle("");
+            viewTimetableButton.setStyle("");
+        }
+    }
+
+    private void requestTimetable() {
+        if (socket == null || socket.isClosed()) {
+            responseArea.appendText("Not connected to server!\n");
+            return;
+        }
+
+        out.println("Display Schedule");
+        Stage timetableStage = new Stage();
+        timetableStage.setTitle("Lecture Timetable");
+
+        TextArea timetableArea = new TextArea();
+        timetableArea.setEditable(false);
+
+        VBox layout = new VBox(10);
+        layout.setPadding(new Insets(15));
+        layout.getChildren().add(timetableArea);
+
+        // Apply dark mode to timetable window if enabled
+        if (isDarkMode) {
+            String darkStyle = "-fx-base: #2d2d2d; " +
+                    "-fx-background: #3c3f41; " +
+                    "-fx-control-inner-background: #3c3f41; " +
+                    "-fx-text-fill: #e0e0e0;";
+            layout.setStyle(darkStyle);
+            timetableArea.setStyle(darkStyle + "-fx-background-color: #3c3f41;");
+        }
+
+        timetableStage.setScene(new Scene(layout, 400, 300));
+        timetableStage.show();
+
+        try {
+            String line;
+            StringBuilder schedule = new StringBuilder();
+            while ((line = in.readLine()) != null) {
+                if ("END".equals(line)) break;
+                schedule.append(line).append("\n");
+            }
+            timetableArea.setText(schedule.toString().trim());
+        } catch (IOException e) {
+            timetableArea.setText("Error retrieving timetable from server.");
+        }
     }
 
     private void connectToServer() {
@@ -113,39 +204,6 @@ public class Client extends Application {
         }
     }
 
-    private void requestTimetable() {
-        if (socket == null || socket.isClosed()) {
-            responseArea.appendText("Not connected to server!\n");
-            return;
-        }
-
-        out.println("Display Schedule");
-        Stage timetableStage = new Stage();
-        timetableStage.setTitle("Lecture Timetable");
-
-        TextArea timetableArea = new TextArea();
-        timetableArea.setEditable(false);
-
-        VBox layout = new VBox(10);
-        layout.setPadding(new Insets(15));
-        layout.getChildren().add(timetableArea);
-
-        timetableStage.setScene(new Scene(layout, 400, 300));
-        timetableStage.show();
-
-        try {
-            String line;
-            StringBuilder schedule = new StringBuilder();
-            while ((line = in.readLine()) != null) {
-                if ("END".equals(line)) break;
-                schedule.append(line).append("\n");
-            }
-            timetableArea.setText(schedule.toString().trim());
-        } catch (IOException e) {
-            timetableArea.setText("Error retrieving timetable from server.");
-        }
-    }
-
     private void stopConnection() {
         if (socket != null && !socket.isClosed()) {
             out.println("STOP");
@@ -156,5 +214,9 @@ public class Client extends Application {
                 responseArea.appendText("Error closing connection\n");
             }
         }
+    }
+
+    public static void main(String[] args) {
+        launch(args);
     }
 }

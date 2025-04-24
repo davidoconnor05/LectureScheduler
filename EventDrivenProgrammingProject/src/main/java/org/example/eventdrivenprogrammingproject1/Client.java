@@ -14,7 +14,7 @@ public class Client extends Application {
     private ComboBox<String> actionBox;
     private TextField moduleField;
     private ComboBox<String> dateBox, startBox, endBox, roomBox;
-    private Button sendButton, stopButton, viewTimetableButton;
+    private Button sendButton, stopButton, viewTimetableButton, earlyLecturesButton;
     private Socket socket;
     private PrintWriter out;
     private BufferedReader in;
@@ -26,7 +26,7 @@ public class Client extends Application {
     public void start(Stage primaryStage) {
         primaryStage.setTitle("Lecture Scheduler Client");
         VBox root = createLayout();
-        scene = new Scene(root, 350, 450);
+        scene = new Scene(root, 350, 500);
         primaryStage.setScene(scene);
         primaryStage.show();
         connectToServer();
@@ -59,6 +59,7 @@ public class Client extends Application {
         sendButton = new Button("Send Request");
         stopButton = new Button("STOP");
         viewTimetableButton = new Button("View Timetable");
+        earlyLecturesButton = new Button("Request Early Lectures");
 
         responseArea = new TextArea();
         responseArea.setEditable(false);
@@ -70,11 +71,12 @@ public class Client extends Application {
         VBox layout = new VBox(10);
         layout.setPadding(new Insets(15));
         layout.getChildren().addAll(actionBox, moduleField, dateBox, startBox, endBox, roomBox,
-                sendButton, stopButton, viewTimetableButton, responseArea, darkModeToggle);
+                sendButton, stopButton, viewTimetableButton, earlyLecturesButton, responseArea, darkModeToggle);
 
         sendButton.setOnAction(e -> sendRequest());
         stopButton.setOnAction(e -> stopConnection());
         viewTimetableButton.setOnAction(e -> requestTimetable());
+        earlyLecturesButton.setOnAction(e -> requestEarlyLectures());
 
         return layout;
     }
@@ -92,7 +94,6 @@ public class Client extends Application {
                 "-fx-text-fill: #e0e0e0;";
 
         if (isDarkMode) {
-            // Apply dark theme to main components
             scene.getRoot().setStyle(darkStyle);
             responseArea.setStyle(darkStyle + "-fx-background-color: #3c3f41;");
             moduleField.setStyle(darkStyle);
@@ -104,8 +105,8 @@ public class Client extends Application {
             sendButton.setStyle(darkStyle);
             stopButton.setStyle(darkStyle);
             viewTimetableButton.setStyle(darkStyle);
+            earlyLecturesButton.setStyle(darkStyle);
         } else {
-            // Reset to default theme
             scene.getRoot().setStyle("");
             responseArea.setStyle("");
             moduleField.setStyle("");
@@ -117,6 +118,22 @@ public class Client extends Application {
             sendButton.setStyle("");
             stopButton.setStyle("");
             viewTimetableButton.setStyle("");
+            earlyLecturesButton.setStyle("");
+        }
+    }
+
+    private void requestEarlyLectures() {
+        if (socket == null || socket.isClosed()) {
+            responseArea.appendText("Not connected to server!\n");
+            return;
+        }
+
+        out.println("Early Lectures");
+        try {
+            String response = in.readLine();
+            responseArea.appendText("Server: " + response + "\n");
+        } catch (IOException e) {
+            responseArea.appendText("Error receiving response from server\n");
         }
     }
 
@@ -137,7 +154,6 @@ public class Client extends Application {
         layout.setPadding(new Insets(15));
         layout.getChildren().add(timetableArea);
 
-        // Apply dark mode to timetable window if enabled
         if (isDarkMode) {
             String darkStyle = "-fx-base: #2d2d2d; " +
                     "-fx-background: #3c3f41; " +

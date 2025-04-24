@@ -1,23 +1,21 @@
 package org.example.eventdrivenprogrammingproject1;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.PrintWriter;
+import java.io.*;
 import java.net.Socket;
 import java.util.*;
-import java.util.Map;
-
+import java.util.function.Consumer;
 
 public class ClientHandler extends Thread {
     private final Socket socket;
     private final Map<String, List<Lecture>> schedule;
+    private final Consumer<String> logger;
     private PrintWriter out;
     private BufferedReader in;
 
-    public ClientHandler(Socket socket, Map<String, List<Lecture>> schedule) {
+    public ClientHandler(Socket socket, Map<String, List<Lecture>> schedule, Consumer<String> logger) {
         this.socket = socket;
         this.schedule = schedule;
+        this.logger = logger;
     }
 
     @Override
@@ -28,20 +26,19 @@ public class ClientHandler extends Thread {
 
             String request;
             while ((request = in.readLine()) != null) {
-                System.out.println("Received: " + request);
+                logger.accept("Received: " + request);
                 handleRequest(request);
             }
         } catch (IOException e) {
-            System.err.println("Client disconnected: " + e.getMessage());
+            logger.accept("Client disconnected: " + e.getMessage());
         } finally {
             try {
                 socket.close();
             } catch (IOException e) {
-                System.err.println("Error closing socket: " + e.getMessage());
+                logger.accept("Error closing socket: " + e.getMessage());
             }
         }
     }
-
 
     private void handleRequest(String request) {
         String[] parts = request.split("; ");
@@ -79,22 +76,26 @@ public class ClientHandler extends Thread {
         String room = parts[5];
 
         Lecture newLecture = new Lecture(module, date, startTime, endTime, room);
-        List<Lecture> lectures = schedule.computeIfAbsent(module, k -> new ArrayList<>());
 
-        if (isClash(newLecture)) {
-            out.println("Scheduling clash detected.");
-        } else {
-            lectures.add(newLecture);
-            out.println("Lecture added successfully.");
-            printAllLectures();
+        synchronized (schedule) {
+            List<Lecture> lectures = schedule.computeIfAbsent(module, k -> new ArrayList<>());
+
+            if (isClash(newLecture)) {
+                out.println("Scheduling clash detected.");
+            } else {
+                lectures.add(newLecture);
+                out.println("Lecture added successfully.");
+            }
         }
     }
 
     private boolean isClash(Lecture newLecture) {
-        for (List<Lecture> lectures : schedule.values()) {
-            for (Lecture lecture : lectures) {
-                if (lecture.clashesWith(newLecture)) {
-                    return true;
+        synchronized (schedule) {
+            for (List<Lecture> lectures : schedule.values()) {
+                for (Lecture lecture : lectures) {
+                    if (lecture.clashesWith(newLecture)) {
+                        return true;
+                    }
                 }
             }
         }
@@ -114,38 +115,31 @@ public class ClientHandler extends Thread {
         String room = parts[5];
 
         Lecture lectureToRemove = new Lecture(module, date, startTime, endTime, room);
-        List<Lecture> lectures = schedule.get(module);
 
-        if (lectures != null && lectures.removeIf(lecture -> lecture.equals(lectureToRemove))) {
-            out.println("Lecture removed. Freed: " + room + " on " + date + " from " + startTime + " to " + endTime);
-            printAllLectures();
-        } else {
-            out.println("Lecture not found.");
+        synchronized (schedule) {
+            List<Lecture> lectures = schedule.get(module);
+            if (lectures != null && lectures.removeIf(lecture -> lecture.equals(lectureToRemove))) {
+                out.println("Lecture removed.");
+            } else {
+                out.println("Lecture not found.");
+            }
         }
     }
 
     private void displaySchedule() {
         StringBuilder sb = new StringBuilder();
-        if (schedule.isEmpty()) {
-            sb.append("No lectures found.");
-        } else {
-            for (Map.Entry<String, List<Lecture>> entry : schedule.entrySet()) {
-                for (Lecture lecture : entry.getValue()) {
-                    sb.append(lecture).append("\n");
+        synchronized (schedule) {
+            if (schedule.isEmpty()) {
+                sb.append("No lectures found.");
+            } else {
+                for (Map.Entry<String, List<Lecture>> entry : schedule.entrySet()) {
+                    for (Lecture lecture : entry.getValue()) {
+                        sb.append(lecture).append("\n");
+                    }
                 }
             }
         }
         out.println(sb.toString().trim());
-        out.println("END"); // Marks the end of data
-    }
-
-    private void printAllLectures() {
-        System.out.println("Current Lecture Schedule:");
-        for (Map.Entry<String, List<Lecture>> entry : schedule.entrySet()) {
-            System.out.println("Module: " + entry.getKey());
-            for (Lecture lecture : entry.getValue()) {
-                System.out.println("  " + lecture);
-            }
-        }
+        out.println("END");
     }
 }
